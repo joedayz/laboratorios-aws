@@ -125,11 +125,21 @@ Todos los comandos del lab funcionan igual con `podman`. Esta tabla es la refere
 ### PODMAN — Flujo completo con ECR
 
 ```bash
-# Variables
+# Variables — definir con comillas para evitar caracteres invisibles
 AWS_REGION="us-east-1"
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text | tr -d '[:space:]')
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 REPO_NAME="lab-contenedor"
+
+# ⚠️  VERIFICAR antes de continuar — deben verse exactamente así, sin espacios ni caracteres extra
+echo "Account ID : '${AWS_ACCOUNT_ID}'"
+echo "ECR URI    : '${ECR_URI}'"
+echo "Repo Name  : '${REPO_NAME}'"
+echo "Full URI   : '${ECR_URI}/${REPO_NAME}'"
+# Si algún valor se ve raro (doble nombre, caracteres extraños) → redefinir manualmente:
+# export AWS_ACCOUNT_ID="123456789012"
+# export ECR_URI="123456789012.dkr.ecr.us-east-1.amazonaws.com"
+# export REPO_NAME="lab-contenedor"
 
 # PASO 1 — Construir la imagen
 podman build -t lab-contenedor:1.0.0 .
@@ -157,10 +167,20 @@ aws ecr get-login-password --region $AWS_REGION | \
 # Login Succeeded! ✅
 
 # PASO 4 — Etiquetar y hacer push a ECR
-podman tag lab-contenedor:1.0.0 $ECR_URI/$REPO_NAME:1.0.0
-podman tag lab-contenedor:1.0.0 $ECR_URI/$REPO_NAME:latest
+# ⚠️  Usar la URI completa hardcodeada en el tag para evitar errores de variables
+# Reemplazar 123456789012 con tu AWS Account ID real (el que mostraron los echo del paso anterior)
+FULL_URI="${ECR_URI}/${REPO_NAME}"
 
-podman push $ECR_URI/$REPO_NAME:1.0.0
+podman tag lab-contenedor:1.0.0 ${FULL_URI}:1.0.0
+podman tag lab-contenedor:1.0.0 ${FULL_URI}:latest
+
+# Verificar ANTES de hacer push — ambas líneas deben mostrar "lab-contenedor" sin nada extra
+podman images | grep "${AWS_ACCOUNT_ID}"
+# Salida esperada:
+# xxx.dkr.ecr.us-east-1.amazonaws.com/lab-contenedor  1.0.0   sha256:xxx ...
+# xxx.dkr.ecr.us-east-1.amazonaws.com/lab-contenedor  latest  sha256:xxx ...
+
+podman push ${FULL_URI}:1.0.0
 podman push $ECR_URI/$REPO_NAME:latest
 
 # Verificar en ECR
@@ -438,12 +458,19 @@ podman stop mi-app-local && podman rm mi-app-local
 ```bash
 # Variables (reemplazar con tu región y cuenta)
 AWS_REGION="us-east-1"
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text | tr -d '[:space:]')
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 REPO_NAME="lab-contenedor"
 
-echo "Account ID: $AWS_ACCOUNT_ID"
-echo "ECR URI: $ECR_URI"
+# ⚠️  VERIFICAR que las variables no tienen caracteres invisibles antes de continuar
+echo "Account ID : '${AWS_ACCOUNT_ID}'"
+echo "ECR URI    : '${ECR_URI}'"
+echo "Repo Name  : '${REPO_NAME}'"
+echo "Full URI   : '${ECR_URI}/${REPO_NAME}'"
+# Si algún valor se ve concatenado o raro → redefinir manualmente:
+# export AWS_ACCOUNT_ID="123456789012"
+# export ECR_URI="123456789012.dkr.ecr.us-east-1.amazonaws.com"
+# export REPO_NAME="lab-contenedor"
 ```
 
 ```
@@ -478,26 +505,39 @@ aws ecr get-login-password --region $AWS_REGION | \
     $ECR_URI
 # Login Succeeded! ✅
 
-# Etiquetar la imagen con la URI de ECR
-# (igual para Docker y Podman — solo cambia el prefijo del comando)
-docker tag lab-contenedor:1.0.0 $ECR_URI/$REPO_NAME:1.0.0   # docker
-podman tag lab-contenedor:1.0.0 $ECR_URI/$REPO_NAME:1.0.0   # podman
+# ⚠️  CONSTRUIR la URI completa una sola vez antes de taggear
+# Esto evita el problema de concatenación cuando $REPO_NAME tiene caracteres invisibles
+FULL_URI="${ECR_URI}/${REPO_NAME}"
+echo "Push URI: '${FULL_URI}'"
+# Debe mostrar EXACTAMENTE (sin nada extra):
+# Push URI: '123456789012.dkr.ecr.us-east-1.amazonaws.com/lab-contenedor'
 
-docker tag lab-contenedor:1.0.0 $ECR_URI/$REPO_NAME:latest   # docker
-podman tag lab-contenedor:1.0.0 $ECR_URI/$REPO_NAME:latest   # podman
+# Etiquetar usando ${FULL_URI} con llaves — más seguro que $ECR_URI/$REPO_NAME
+docker tag lab-contenedor:1.0.0 ${FULL_URI}:1.0.0    # docker
+docker tag lab-contenedor:1.0.0 ${FULL_URI}:latest   # docker
+
+podman tag lab-contenedor:1.0.0 ${FULL_URI}:1.0.0    # podman
+podman tag lab-contenedor:1.0.0 ${FULL_URI}:latest   # podman
+
+# ⚠️  VERIFICAR los tags antes del push — si el nombre no dice solo "lab-contenedor" hay problema
+docker images | grep "${AWS_ACCOUNT_ID}"   # docker
+podman images | grep "${AWS_ACCOUNT_ID}"   # podman
+# Salida esperada (dos líneas con el mismo repositorio):
+# 123456789012.dkr.ecr.us-east-1.amazonaws.com/lab-contenedor  1.0.0   sha256:xxx ...
+# 123456789012.dkr.ecr.us-east-1.amazonaws.com/lab-contenedor  latest  sha256:xxx ...
 
 # Subir la imagen a ECR
-docker push $ECR_URI/$REPO_NAME:1.0.0    # docker
-docker push $ECR_URI/$REPO_NAME:latest   # docker
+docker push ${FULL_URI}:1.0.0    # docker
+docker push ${FULL_URI}:latest   # docker
 
-podman push $ECR_URI/$REPO_NAME:1.0.0    # podman
-podman push $ECR_URI/$REPO_NAME:latest   # podman
+podman push ${FULL_URI}:1.0.0    # podman
+podman push ${FULL_URI}:latest   # podman
 
 # Verificar que está en ECR
 aws ecr list-images \
   --repository-name $REPO_NAME \
   --query 'imageIds[*].[imageTag]' \
-  --output table
+  --output table --no-cli-pager
 # +--------+
 # | 1.0.0  |
 # | latest |
@@ -925,26 +965,30 @@ aws logs tail /ecs/lab-tarea-web --follow
 # Modificar la app para simular una nueva versión
 sed -i 's/version: .*/version: "2.0.0 - rolling update",/' ~/lab-contenedor/app.js
 
-# Reconstruir la imagen con nuevo tag
 cd ~/lab-contenedor
-AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text | tr -d '[:space:]')
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
+REPO_NAME="lab-contenedor"
+FULL_URI="${ECR_URI}/${REPO_NAME}"
+
+# Verificar antes de continuar
+echo "Push URI: '${FULL_URI}'"
 
 # ── Con Docker ──────────────────────────────────────────────
-docker build -t $ECR_URI/lab-contenedor:2.0.0 .
-docker build -t $ECR_URI/lab-contenedor:latest .
+docker build -t ${FULL_URI}:2.0.0 .
+docker build -t ${FULL_URI}:latest .
 aws ecr get-login-password --region us-east-1 | \
   docker login --username AWS --password-stdin $ECR_URI
-docker push $ECR_URI/lab-contenedor:2.0.0
-docker push $ECR_URI/lab-contenedor:latest
+docker push ${FULL_URI}:2.0.0
+docker push ${FULL_URI}:latest
 
 # ── Con Podman ───────────────────────────────────────────────
-podman build -t $ECR_URI/lab-contenedor:2.0.0 .
-podman build -t $ECR_URI/lab-contenedor:latest .
+podman build -t ${FULL_URI}:2.0.0 .
+podman build -t ${FULL_URI}:latest .
 aws ecr get-login-password --region us-east-1 | \
   podman login --username AWS --password-stdin $ECR_URI
-podman push $ECR_URI/lab-contenedor:2.0.0
-podman push $ECR_URI/lab-contenedor:latest
+podman push ${FULL_URI}:2.0.0
+podman push ${FULL_URI}:latest
 ```
 
 ```
