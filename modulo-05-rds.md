@@ -156,8 +156,8 @@ Mientras espera RDS:
 ```bash
 # Dentro de la instancia EC2:
 
-# Instalar el cliente MySQL
-sudo yum install mysql -y
+# Instalar el cliente MariaDB compatible con MySQL en Amazon Linux 2023
+sudo dnf install mariadb105 -y
 
 # Obtener el endpoint de RDS:
 #   RDS → Databases → "lab-mysql-01"
