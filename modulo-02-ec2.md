@@ -114,14 +114,16 @@ Name: lab-web-01
 
 --- Configure storage ---
   8 GiB, gp3  (dejar por defecto)
-
---- Advanced details → User data ---
-  Pegar el script de abajo en el campo "User data"
 ```
+
+**Opción A — Configurar automáticamente con User Data**
+
+En **Advanced details → User data**, pega el siguiente script:
 
 ```bash
 #!/bin/bash
 # User Data: se ejecuta como root al iniciar la instancia por primera vez
+set -e
 yum update -y
 yum install httpd -y
 systemctl start httpd
@@ -155,12 +157,19 @@ EOF
 # Reemplazar variables con valores reales del servidor
 HOSTNAME=$(hostname)
 IP_PRIV=$(hostname -I | awk '{print $1}')
-AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+TOKEN=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+AZ=$(curl -fsS -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/placement/availability-zone)
 
 sed -i "s/HOSTNAME_VAR/$HOSTNAME/g" /var/www/html/index.html
 sed -i "s/IPPRIV_VAR/$IP_PRIV/g"   /var/www/html/index.html
 sed -i "s/AZ_VAR/$AZ/g"            /var/www/html/index.html
 ```
+
+**Opción B — Instalar manualmente por SSH:** deja User Data vacío y sigue las
+instrucciones del paso 4. También puedes usar esta opción si ya lanzaste la
+instancia y olvidaste configurar User Data.
 
 ```
 Clic "Launch instance"
@@ -187,7 +196,59 @@ ssh -i ~/Downloads/lab-key-ec2.pem ec2-user@54.123.45.67
 
 # Deberías ver el prompt:
 #   [ec2-user@ip-10-0-1-xx ~]$
+```
 
+**Opción B — Instalar Apache manualmente:** si no usaste User Data, ejecuta
+este bloque completo **dentro de la instancia**, después de conectarte por SSH:
+
+```bash
+sudo bash <<'INSTALL'
+set -e
+yum update -y
+yum install httpd -y
+systemctl start httpd
+systemctl enable httpd
+
+cat > /var/www/html/index.html <<'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Servidor EC2</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 60px; background: #f4f4f4; }
+    .box { background: white; padding: 30px; border-radius: 10px; display: inline-block; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h1 { color: #232F3E; }
+    .info { background: #FF9900; color: white; padding: 10px; border-radius: 5px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>✅ Servidor EC2 en AWS</h1>
+    <div class="info">Hostname: HOSTNAME_VAR</div>
+    <div class="info">IP Privada: IPPRIV_VAR</div>
+    <div class="info">AZ: AZ_VAR</div>
+  </div>
+</body>
+</html>
+EOF
+
+HOSTNAME=$(hostname)
+IP_PRIV=$(hostname -I | awk '{print $1}')
+TOKEN=$(curl -fsS -X PUT http://169.254.169.254/latest/api/token \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+AZ=$(curl -fsS -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/placement/availability-zone)
+
+sed -i "s/HOSTNAME_VAR/$HOSTNAME/g" /var/www/html/index.html
+sed -i "s/IPPRIV_VAR/$IP_PRIV/g"   /var/www/html/index.html
+sed -i "s/AZ_VAR/$AZ/g"            /var/www/html/index.html
+INSTALL
+```
+
+Luego, con cualquiera de las dos opciones, verifica desde la instancia:
+
+```bash
 # Verificar que Apache está corriendo
 sudo systemctl status httpd
 # Active: active (running) ✅
