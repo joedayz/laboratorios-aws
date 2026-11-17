@@ -296,24 +296,44 @@ Clic "Create image"
 
 ---
 
-### Paso 2 — Crear segunda subnet pública (obligatoria para el ALB)
+### Paso 2 — Seleccionar dos subnets públicas para el ALB
 
 ```
-El ALB necesita subnets en al menos 2 Zonas de Disponibilidad distintas.
+El ALB necesita dos subnets públicas en distintas Zonas de Disponibilidad,
+dentro de la misma VPC de la instancia "lab-web-01".
 
+EC2 → Instances → seleccionar "lab-web-01"
+  Anotar su VPC ID y Subnet ID.
+
+VPC → "Subnets"
+  Filtrar por el VPC ID anotado.
+  Seleccionar la subnet de la instancia y otra subnet de una AZ distinta.
+  Consultar la columna "Availability Zone" o los detalles de cada subnet.
+  Anotar los dos Subnet ID para los pasos 6 y 7.
+
+Para cada subnet, abrir la pestaña "Route table":
+  Verificar que exista una ruta 0.0.0.0/0 hacia un Internet Gateway (igw-...).
+  Puede ser la tabla principal de la VPC, aunque no haya asociación explícita.
+
+Si usas la VPC default y ya tienes dos subnets que cumplen estas condiciones,
+no necesitas crear otra VPC ni otra subnet.
+```
+
+Si falta una segunda subnet, créala en la misma VPC y en otra AZ, con un CIDR
+disponible dentro de la VPC que no se solape con las demás subnets:
+
+```
 VPC → "Subnets" → "Create subnet"
-  VPC:   lab-vpc-01
-  Name:  lab-subnet-publica-1b
-  AZ:    us-east-1b  ← diferente AZ
-  CIDR:  10.0.3.0/24
+  Elegir la VPC, una AZ diferente y un CIDR disponible.
 Clic "Create subnet"
 
-Luego asociar esta subnet a la tabla de rutas pública:
-VPC → Route Tables → "lab-rtb-publica"
-Pestaña "Subnet associations" → "Edit subnet associations"
-  Marcar TAMBIÉN "lab-subnet-publica-1b"
-Clic "Save associations"
+VPC → "Route Tables" → seleccionar la tabla de rutas pública de esa VPC
+  "Subnet associations" → "Edit subnet associations"
+  Marcar también la nueva subnet → "Save associations"
 ```
+
+Para `lab-vpc-01` del módulo 1, puedes usar `10.0.3.0/24` si está disponible
+y asociarla a `lab-rtb-publica`.
 
 ---
 
@@ -323,7 +343,7 @@ Clic "Save associations"
 EC2 → Security Groups → "Create security group"
   Name:        sg-alb-lab
   Description: Acceso HTTP al Load Balancer
-  VPC:         lab-vpc-01
+  VPC:         la misma VPC de "lab-web-01" (default o lab-vpc-01)
 
   Inbound rules:
     Type: HTTP, Port: 80, Source: Anywhere-IPv4 (0.0.0.0/0)
@@ -379,7 +399,7 @@ EC2 → "Target Groups" → "Create target group"
   Target group name: tg-web-lab
   Protocol:          HTTP
   Port:              80
-  VPC:               lab-vpc-01
+  VPC:               la misma VPC de "lab-web-01"
 
   Health check settings:
     Protocol:                HTTP
@@ -408,10 +428,9 @@ Seleccionar: "Application Load Balancer" → Clic "Create"
   IP address type:    IPv4
 
   Network mapping:
-    VPC: lab-vpc-01
+    VPC: la misma VPC de "lab-web-01"
     Availability Zones:
-      us-east-1a → seleccionar: lab-subnet-publica-1a
-      us-east-1b → seleccionar: lab-subnet-publica-1b
+      Seleccionar las dos subnets de distintas AZ anotadas en el paso 2.
 
   Security groups:
     Remover el grupo default
@@ -442,10 +461,9 @@ EC2 → "Auto Scaling Groups" → "Create Auto Scaling group"
 Clic "Next"
 
 --- Step 2: Choose instance launch options ---
-  VPC: lab-vpc-01
+  VPC: la misma VPC de "lab-web-01"
   Availability Zones and subnets:
-    Seleccionar: lab-subnet-publica-1a
-    Seleccionar: lab-subnet-publica-1b
+    Seleccionar las dos subnets anotadas en el paso 2.
 Clic "Next"
 
 --- Step 3: Configure advanced options ---
